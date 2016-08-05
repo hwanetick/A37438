@@ -59,22 +59,22 @@
 /*
   RA9  - ADC VREF-
   RA10 - ADC VREF+
-  RA14 - PIN_CUSTOMER_HV_ON
+  RA14 - PIN_CUSTOMER_HV_ON  <----------Trigger Input Interrupt
  
   RB0  - ICD  - PROGRAM
   RB1  - ICD  - PROGRAM
   RB3  - AN3  - POT EK
   RB4  - AN4  - POT VTOP
   RB5  - AN5  - POT HTR
-  RB6  - AN6  - REF HTR
-  RB7  - AN7  - REF VTOP
-  RB13 - AN13 - REF EK
+  RB6  - AN6  - REF HTR        <-----------SW Bit 1
+  RB7  - AN7  - REF VTOP       <-----------SW Bit 3
+  RB13 - AN13 - REF EK         <-----------SW Bit 2
   RB14 - AN14 - PIC ADC +15V MON
   RB15 - AN15 - PIC ADC -15V MON
 
   RC1  - DAC LDAC  (Configured by DAC module)
 
-  RD8  - PIN_CUSTOMER_BEAM_ENABLE
+  RD8  - PIN_CUSTOMER_BEAM_ENABLE  <-----------SW Bit 0
 
 
   RF0  - CAN 1 (Configured By Pic Module)
@@ -121,22 +121,29 @@
 #define ADCON2_SETTING          (ADC_VREF_EXT_EXT & ADC_SCAN_ON & ADC_SAMPLES_PER_INT_8 & ADC_ALT_BUF_ON & ADC_ALT_INPUT_OFF)
 #define ADCON3_SETTING          (ADC_SAMPLE_TIME_4 & ADC_CONV_CLK_SYSTEM & ADC_CONV_CLK_9Tcy2)
 #define ADCHS_SETTING           (ADC_CH0_POS_SAMPLEA_AN3 & ADC_CH0_NEG_SAMPLEA_VREFN & ADC_CH0_POS_SAMPLEB_AN3 & ADC_CH0_NEG_SAMPLEB_VREFN)
-#define ADPCFG_SETTING          (ENABLE_AN3_ANA & ENABLE_AN4_ANA & ENABLE_AN5_ANA & ENABLE_AN6_ANA & ENABLE_AN7_ANA & ENABLE_AN13_ANA & ENABLE_AN14_ANA & ENABLE_AN15_ANA)
-#define ADCSSL_SETTING          (SKIP_SCAN_AN0 & SKIP_SCAN_AN1 & SKIP_SCAN_AN2 & SKIP_SCAN_AN8 & SKIP_SCAN_AN9 & SKIP_SCAN_AN10 & SKIP_SCAN_AN11 & SKIP_SCAN_AN12)
+#define ADPCFG_SETTING          (ENABLE_AN3_ANA & ENABLE_AN4_ANA & ENABLE_AN5_ANA & ENABLE_AN14_ANA & ENABLE_AN15_ANA)
+#define ADCSSL_SETTING          (SKIP_SCAN_AN0 & SKIP_SCAN_AN1 & SKIP_SCAN_AN2 & SKIP_SCAN_AN6 & SKIP_SCAN_AN7 & SKIP_SCAN_AN8 & SKIP_SCAN_AN9 & SKIP_SCAN_AN10 & SKIP_SCAN_AN11 & SKIP_SCAN_AN12 & SKIP_SCAN_AN13)
 
 
 
 
 // Digital Inputs
-#define PIN_CUSTOMER_HV_ON                            _RA14
-#define ILL_PIN_CUSTOMER_HV_ON_ENABLE_HV              1
+#define PIN_TRIGGER_INPUT                            _RA14
+#define ILL_PIN_TRIGGER_INPUT                        1
 
-#define PIN_CUSTOMER_BEAM_ENABLE                      _RD8
-#define ILL_PIN_CUSTOMER_BEAM_ENABLE_BEAM_ENABLED     0
+
+#define PIN_SW_BIT0_STATUS                           _RD8  
+#define ILL_PIN_SW_BIT0_ON                           0
+
+#define PIN_SW_BIT1_STATUS                           _RB6
+#define PIN_SW_BIT2_STATUS                           _RB13
+#define PIN_SW_BIT3_STATUS                           _RB7
+#define ILL_PIN_SW_BIT1_ON                           1
+
 
 //------------------- GUN Driver Interface I/O ------------------------- //
-#define PIN_CS_DAC                                    _LATD13
-#define OLL_PIN_CS_DAC_SELECTED                       1
+#define PIN_CS_DAC                                   _LATD13
+#define OLL_PIN_CS_DAC_SELECTED                      1
 
 #define PIN_CS_ADC                                   _LATD14
 #define OLL_PIN_CS_ADC_SELECTED                      1
@@ -147,11 +154,12 @@
 
 
 // Digital Outputs
-#define PIN_CPU_WARMUP_STATUS                        _LATD0
-#define PIN_CPU_STANDBY_STATUS                       _LATD11
-#define PIN_CPU_HV_ON_STATUS                         _LATD10
+#define PIN_CPU_SWITCH_BIT0_ENABLE                   _LATD0
+#define PIN_CPU_SWITCH_BIT1_ENABLE                   _LATD11
+#define PIN_CPU_SWITCH_BIT2_ENABLE                   _LATD10
+#define PIN_CPU_SWITCH_BIT3_ENABLE                   _LATA15
+
 #define PIN_CPU_BEAM_ENABLE_STATUS                   _LATF5  // DPARKER THERE IS ERROR ON SCHEMATIC
-#define PIN_CPU_SYSTEM_OK_STATUS                     _LATA15
 #define PIN_CPU_EXTRA_STATUS                         _LATD3
 #define OLL_STATUS_ACTIVE                            1
 
@@ -309,8 +317,20 @@ typedef struct {
 
   unsigned int heater_voltage_current_limited;  // This counter is used to track how long the heater is opperating in current limited mode. 
   unsigned int previous_state_pin_customer_hv_on;  // This stores the previous state of customer HV on input.  An On -> Off transion of this pin is used to generate a reset in discrete control mode
-
-
+  
+  unsigned int last_period;
+  unsigned int trigger_complete;
+  unsigned int this_pulse_level_energy_command;
+  unsigned int next_pulse_level_energy_command;
+  
+  unsigned char dose_switch_value;
+  
+  TYPE_DIGITAL_INPUT switch_bit_0;
+  TYPE_DIGITAL_INPUT switch_bit_1;
+  TYPE_DIGITAL_INPUT switch_bit_2;
+  TYPE_DIGITAL_INPUT switch_bit_3;
+  
+  
   // These are the Data Structures for the DAC outputs on the converter logic board
   AnalogOutput analog_output_high_voltage;
   AnalogOutput analog_output_top_voltage;
@@ -385,6 +405,22 @@ typedef struct {
 extern TYPE_GLOBAL_DATA_A36772 global_data_A36772;
 
 
+#define  DOSE_0      0x00;
+#define  DOSE_1      0x01;
+#define  DOSE_2      0x02;
+#define  DOSE_3      0x03;
+#define  DOSE_4      0x04;
+#define  DOSE_5      0x05;
+#define  DOSE_6      0x06;
+#define  DOSE_7      0x07;
+#define  DOSE_8      0x08;
+#define  DOSE_9      0x09;                            
+#define  DOSE_A      0x0A;
+#define  DOSE_B      0x0B;
+#define  DOSE_C      0x0C;
+#define  DOSE_D      0x0D;
+#define  DOSE_E      0x0E;    
+#define  DOSE_F      0x0F;
 
 
 
@@ -484,11 +520,12 @@ extern TYPE_GLOBAL_DATA_A36772 global_data_A36772;
 
 /*
   --- Timer1 Setup ---
-  Period of 200ms
+   Used to measure the PRF
+   With 10Mhz Clock, x64 multiplier will yield max period of 419mS, 6.4 uS per Tick
 */
-#define A36772_T1CON_VALUE     (T1_ON & T1_IDLE_CON & T1_GATE_OFF & T1_PS_1_256 & T1_SOURCE_INT)
-#define A36772_PR1_VALUE_US    200000   // 200ms
-#define A36772_PR1_VALUE       ((FCY_CLK/1000000)*A36772_PR1_VALUE_US/256)
+#define A36772_T1CON_VALUE     (T1_ON & T1_IDLE_CON & T1_GATE_OFF & T1_PS_1_64 & T1_SOURCE_INT)
+#define A36772_PR1_VALUE_US    400000   // 400ms
+#define A36772_PR1_VALUE       ((FCY_CLK/1000000)*A36772_PR1_VALUE_US/64)
 
 #define SLAVE_ADDRESS 0x07  //Slave address
 

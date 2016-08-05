@@ -14,11 +14,6 @@ _FGS(CODE_PROT_OFF);
 _FICD(PGD);
 
 
-void ETMCanSpoofPulseSyncNextPulseLevel();
-void ETMCanSpoofAFCHighSpeedDataLog();
-unsigned int next_pulse_count = 0;
-unsigned int spoof_counter = 0;
-
 
 
 
@@ -131,14 +126,6 @@ unsigned char SPICharInverted(unsigned char transmit_byte);
   and inverts the received data before returning it.
 */
 
-
-// Digital Input Functions (NEEDS and ETM Module)
-void ETMDigitalInitializeInput(TYPE_DIGITAL_INPUT* input, unsigned int initial_value, unsigned int filter_time);
-void ETMDigitalUpdateInput(TYPE_DIGITAL_INPUT* input, unsigned int current_value);
-
-
-
-
 // -------------------------- GLOBAL VARIABLES --------------------------- //
 TYPE_GLOBAL_DATA_A36772 global_data_A36772;
 LTC265X U32_LTC2654;
@@ -154,8 +141,137 @@ int main(void) {
 
 void DoStateMachine(void) {
   switch (global_data_A36772.control_state) {
+      
+  case STATE_INIT:
+    InitializeA36772();
+    break;
+      
+  case STATE_OPERATE:
+    DoA36772();
+    break;
+      
+  default:
+      
+  }
+}
 
+unsigned char message0_dose;
+unsigned char message1_energy;
+unsigned char message2_blank;
+unsigned char message3_blank;
+unsigned char message4_crc_low;
+unsigned char message5_crc_high;
+
+unsigned int crc_16_msb;
+
+
+const unsigned char Dose_Array[16] = {0x10,0x20,0x30,0x40,0x50,0x60,0x70,0x80,0x90,0xA0,0xB0,0xC0,0xD0,0xE0,0xF0,0xFF};
+const unsigned int CRC_High_Energy[16] = {0x2455,0x245A,0xE45E,0x2444,0xE440,0xE44F,0x244B,0x2478,0xE47C,0xE473,0x2477,0xE46D,0x2469,0x2466,0xE462,0xF061};
+const unsigned int CRC_Low_Energy[16] = {0xE404,0xE40B,0x240F,0xE415,0x2411,0x241E,0xE41A,0xE429,0x242D,0x2422,0xE426,0x243C,0xE438,0xE437,0x2433,0x3030};
+
+void Init37438(void) {
+ 
+  message1_energy = 0x00;
+  message2_blank = 0x00;
+  message3_blank = 0x00;
+  PIN_RS485_ENABLE = 1;
+  global_data_A36772.dose_switch_value = 0;
+   
+}
+
+void DoA37438(void){
     
+#ifdef __CAN_ENABLED
+  ETMCanSlaveDoCan();
+#endif
+
+#ifndef __CAN_REQUIRED
+  ClrWdt();
+#endif
+  
+  if (trigger_received){
+    trigger_received = 0;
+    message1_energy ^= 0x01;
+    message0_dose = Dose_Array[global_data_A36772.dose_switch_value];
+    if (message1_energy) {
+      crc_int = CRC_High_Energy[global_data_A36772.dose_switch_value];
+    } else {
+      crc_int = CRC_Low_Energy[global_data_A36772.dose_switch_value];
+    }
+    
+    crc_16_msb = crc_int >> 8;
+    message5_crc_high = (unsigned char)crc_16_msb & 0xff;
+    message4_crc_low  = (unsigned char)crc_int & 0xff;     
+    
+    BufferByte64WriteByte(&uart1_output_buffer, message0_dose);
+    BufferByte64WriteByte(&uart1_output_buffer, message1_energy);
+    BufferByte64WriteByte(&uart1_output_buffer, message2_blank);
+    BufferByte64WriteByte(&uart1_output_buffer, message3_blank);
+    BufferByte64WriteByte(&uart1_output_buffer, message4_crc_low);
+    BufferByte64WriteByte(&uart1_output_buffer, message5_crc_high);
+
+    if (!U1STAbits.UTXBF) {
+      U1TXREG = BufferByte64ReadByte(&uart1_output_buffer);
+    }
+  }
+  
+  if (_T2IF) {
+    // Run once every 10ms
+    _T2IF = 0;
+   
+    if (PIN_SW_BIT0_STATUS == ILL_PIN_SW_BIT0_ON) {
+      ETMDigitalUpdateInput(&global_data_A36772.switch_bit_0, 1);   
+    } else {
+      ETMDigitalUpdateInput(&global_data_A36772.switch_bit_0, 0);
+    }
+  
+    if (PIN_SW_BIT1_STATUS == ILL_PIN_SW_BIT1_ON) {
+      ETMDigitalUpdateInput(&global_data_A36772.switch_bit_1, 1);   
+    } else {
+      ETMDigitalUpdateInput(&global_data_A36772.switch_bit_1, 0);
+    }
+  
+    if (PIN_SW_BIT2_STATUS == ILL_PIN_SW_BIT1_ON) {
+      ETMDigitalUpdateInput(&global_data_A36772.switch_bit_2, 1);   
+    } else {
+      ETMDigitalUpdateInput(&global_data_A36772.switch_bit_2, 0);
+    }
+  
+    if (PIN_SW_BIT3_STATUS == ILL_PIN_SW_BIT1_ON) {
+      ETMDigitalUpdateInput(&global_data_A36772.switch_bit_3, 1);   
+    } else {
+      ETMDigitalUpdateInput(&global_data_A36772.switch_bit_3, 0);
+    }
+
+  
+  
+    if (ETMDigitalFilteredOutput(&global_data_A36772.switch_bit_0)) {
+      global_data_A36772.dose_switch_value |= 0x01;
+    } else { 
+      global_data_A36772.dose_switch_value &= ~0x01;
+    }
+  
+    if (ETMDigitalFilteredOutput(&global_data_A36772.switch_bit_1)) {
+      global_data_A36772.dose_switch_value |= 0x02;
+    } else { 
+      global_data_A36772.dose_switch_value &= ~0x02;
+    }
+  
+    if (ETMDigitalFilteredOutput(&global_data_A36772.switch_bit_2)) {
+      global_data_A36772.dose_switch_value |= 0x04;
+    } else { 
+      global_data_A36772.dose_switch_value &= ~0x04;
+    }
+  
+    if (ETMDigitalFilteredOutput(&global_data_A36772.switch_bit_3)) {
+      global_data_A36772.dose_switch_value |= 0x08;
+    } else { 
+      global_data_A36772.dose_switch_value &= ~0x08;
+    }
+  
+  }
+}
+
   case STATE_START_UP:
     InitializeA36772();
     DisableBeam();
@@ -494,6 +610,28 @@ void InitializeA36772(void) {
   
 
   // ---------- Configure Timers ----------------- //
+  
+      // Configure UART Interrupts
+  _U1RXIE = 0;
+  _U1RXIP = 5;
+  
+  _U1TXIE = 0;
+  _U1TXIP = 5;
+  
+    
+  // Set up external INT3 */
+  // This is the trigger interrupt
+  _INT3IF = 0;		// Clear Interrupt flag
+  _INT3IE = 1;		// Enable INT3 Interrupt
+  _INT3EP = 1; 	        // Interrupt on falling edge
+  _INT3IP = 7;		// Set interrupt to highest priority
+      
+          // Initialize TMR1
+  PR1   = A36772_PR1_VALUE;
+  TMR1  = 0;
+  _T1IF = 0;
+  _T1IP = 2;
+  T1CON = A36772_T1CON_VALUE;
 
   // Initialize TMR2
   PR2   = A36772_PR2_VALUE;
@@ -533,9 +671,6 @@ void InitializeA36772(void) {
   _ADIE = 1;
   _ADON = 1;
   
-#ifdef __MODE_MODBUS_INTERFACE
-  ETMModbusInit();
-#endif
   
 
 #ifdef __CAN_ENABLED
@@ -709,45 +844,6 @@ void InitializeA36772(void) {
 			   NO_ABSOLUTE_COUNTER);
 
 
-  ETMAnalogInitializeInput(&global_data_A36772.ref_htr,
-			   MACRO_DEC_TO_SCALE_FACTOR_16(REF_HTR_FIXED_SCALE),
-			   REF_HTR_FIXED_OFFSET,
-			   ANALOG_INPUT_9,
-			   NO_OVER_TRIP,
-			   NO_UNDER_TRIP,
-			   NO_TRIP_SCALE,
-			   NO_FLOOR,
-			   NO_RELATIVE_COUNTER,
-			   NO_ABSOLUTE_COUNTER);
-
-
-  ETMAnalogInitializeInput(&global_data_A36772.ref_vtop,
-			   MACRO_DEC_TO_SCALE_FACTOR_16(REF_VTOP_FIXED_SCALE),
-			   REF_VTOP_FIXED_OFFSET,
-			   ANALOG_INPUT_A,
-			   NO_OVER_TRIP,
-			   NO_UNDER_TRIP,
-			   NO_TRIP_SCALE,
-			   NO_FLOOR,
-			   NO_RELATIVE_COUNTER,
-			   NO_ABSOLUTE_COUNTER);
-
-  ETMAnalogInitializeInput(&global_data_A36772.ref_ek,
-			   MACRO_DEC_TO_SCALE_FACTOR_16(REF_EK_FIXED_SCALE),
-			   REF_EK_FIXED_OFFSET,
-			   ANALOG_INPUT_B,
-			   NO_OVER_TRIP,
-			   NO_UNDER_TRIP,
-			   NO_TRIP_SCALE,
-			   NO_FLOOR,
-			   NO_RELATIVE_COUNTER,
-			   NO_ABSOLUTE_COUNTER);
-
-
-
-
-
-
   // ------------- Initialize Converter Logic Board DAC Outputs ------------------------------ //
   ETMAnalogInitializeOutput(&global_data_A36772.analog_output_high_voltage,
 			    MACRO_DEC_TO_SCALE_FACTOR_16(DAC_HIGH_VOLTAGE_FIXED_SCALE),
@@ -812,6 +908,11 @@ void InitializeA36772(void) {
   global_data_A36772.monitor_grid_voltage.enabled = 1;
   global_data_A36772.monitor_cathode_voltage.enabled = 1;
 
+  ETMDigitalInitializeInput(&global_data_A36772.switch_bit_0,0,0);
+  ETMDigitalInitializeInput(&global_data_A36772.switch_bit_1,0,0);
+  ETMDigitalInitializeInput(&global_data_A36772.switch_bit_2,0,0);
+  ETMDigitalInitializeInput(&global_data_A36772.switch_bit_3,0,0);
+  
   //Reset faults/warnings and inputs
   ResetAllFaultInfo();
   
@@ -853,48 +954,6 @@ void DoStartupLEDs(void) {
 
 
 void ResetAllFaultInfo(void) {
-//  _FAULT_FPGA_FIRMWARE_MAJOR_REV_MISMATCH = 0;
-//  _FAULT_ADC_HV_V_MON_OVER_RELATIVE = 0;
-//  _FAULT_ADC_HV_V_MON_UNDER_RELATIVE = 0;
-//  _FAULT_ADC_HTR_V_MON_OVER_RELATIVE = 0;
-//  _FAULT_ADC_HTR_V_MON_UNDER_RELATIVE = 0;
-//  _FAULT_ADC_HTR_I_MON_OVER_ABSOLUTE = 0;
-//  _FAULT_ADC_HTR_I_MON_UNDER_ABSOLUTE = 0;
-//  _FAULT_ADC_TOP_V_MON_OVER_RELATIVE = 0;
-//  _FAULT_ADC_TOP_V_MON_UNDER_RELATIVE = 0;
-//  _FAULT_ADC_BIAS_V_MON_OVER_ABSOLUTE = 0;
-//  _FAULT_ADC_BIAS_V_MON_UNDER_ABSOLUTE = 0;
-//  _FAULT_ADC_DIGITAL_ARC = 0;
-//  _FAULT_ADC_DIGITAL_OVER_TEMP = 0;
-//  _FAULT_ADC_DIGITAL_GRID = 0;
-//  _FAULT_CONVERTER_LOGIC_ADC_READ_FAILURE = 0;
-//  _FAULT_HEATER_RAMP_TIMEOUT = 0;
-//  _FAULT_HEATER_VOLTAGE_CURRENT_LIMITED = 0;
-//  _FAULT_HEATER_STARTUP_FAILURE = 0;
-//  
-//  _STATUS_CUSTOMER_HV_ON = 0;
-//  _STATUS_CUSTOMER_BEAM_ENABLE = 0;
-//  _STATUS_ADC_DIGITAL_HEATER_NOT_READY = 0;
-//  _STATUS_DAC_WRITE_FAILURE = 0;
-//
-//  _FPGA_CUSTOMER_HARDWARE_REV_MISMATCH         = 0;
-//  _FPGA_FIRMWARE_MINOR_REV_MISMATCH              = 0;
-//  _FPGA_ARC_COUNTER_GREATER_ZERO                 = 0;
-//  _FPGA_ARC_HIGH_VOLTAGE_INHIBIT_ACTIVE          = 0;
-////  _FPGA_HEATER_VOLTAGE_LESS_THAN_4_5_VOLTS       = 0;
-//  _FPGA_MODULE_TEMP_GREATER_THAN_65_C            = 0;
-//  _FPGA_MODULE_TEMP_GREATER_THAN_75_C            = 0;
-////  _FPGA_PULSE_WIDTH_LIMITING                     = 0;
-////  _FPGA_PRF_FAULT                                = 0;
-////  _FPGA_CURRENT_MONITOR_PULSE_WIDTH_FAULT        = 0;
-//  _FPGA_GRID_MODULE_HARDWARE_FAULT               = 0;
-//  _FPGA_GRID_MODULE_OVER_VOLTAGE_FAULT           = 0;
-//  _FPGA_GRID_MODULE_UNDER_VOLTAGE_FAULT          = 0;
-//  _FPGA_GRID_MODULE_BIAS_VOLTAGE_FAULT           = 0;
-//  _FPGA_HV_REGULATION_WARNING                    = 0;
-//  _FPGA_DIPSWITCH_1_ON                           = 0;
-//  _FPGA_TEST_MODE_TOGGLE_SWITCH_TEST_MODE        = 0;
-//  _FPGA_LOCAL_MODE_TOGGLE_SWITCH_LOCAL_MODE      = 0;
 
   _FAULT_REGISTER = 0;
   _WARNING_REGISTER = 0;
@@ -919,6 +978,8 @@ void ResetAllFaultInfo(void) {
   ETMDigitalInitializeInput(&global_data_A36772.fpga_dipswitch_1_on                        , 0, 30);
   ETMDigitalInitializeInput(&global_data_A36772.fpga_test_mode_toggle_switch_set_to_test   , 0, 30);
   ETMDigitalInitializeInput(&global_data_A36772.fpga_local_mode_toggle_switch_set_to_local , 0, 30);
+  
+
 
   // Initialize Digital Input Filters For ADC "Digital" Inputs
   ETMDigitalInitializeInput(&global_data_A36772.adc_digital_warmup_flt                     , 1, 30);
@@ -1037,7 +1098,7 @@ void DoA36772(void) {
 
 
 #ifdef __DISCRETE_CONTROLS
-  if (PIN_CUSTOMER_HV_ON == ILL_PIN_CUSTOMER_HV_ON_ENABLE_HV) {
+  if (PIN_TRIGGER_INPUT == ILL_PIN_TRIGGER_INPUT) {
     global_data_A36772.request_hv_enable = 1;
     _STATUS_CUSTOMER_HV_ON = 1;
   } else {
@@ -1045,7 +1106,7 @@ void DoA36772(void) {
     _STATUS_CUSTOMER_HV_ON = 0;
   }
 
-  if (PIN_CUSTOMER_BEAM_ENABLE == ILL_PIN_CUSTOMER_BEAM_ENABLE_BEAM_ENABLED) {
+  if (PIN_SW_BIT0_STATUS == ILL_PIN_SW_BIT0_ON) {
     global_data_A36772.request_beam_enable = 1;
     _STATUS_CUSTOMER_BEAM_ENABLE = 1;
   } else {
@@ -1124,9 +1185,9 @@ void DoA36772(void) {
 #endif
 
 #ifdef __DISCRETE_CONTROLS
-    unsigned int state_pin_customer_hv_on = PIN_CUSTOMER_HV_ON;
+    unsigned int state_pin_customer_hv_on = PIN_TRIGGER_INPUT;
     if (global_data_A36772.control_state != STATE_FAULT_WARMUP_HEATER_OFF) {
-      if ((state_pin_customer_hv_on == !ILL_PIN_CUSTOMER_HV_ON_ENABLE_HV) && (global_data_A36772.previous_state_pin_customer_hv_on == ILL_PIN_CUSTOMER_HV_ON_ENABLE_HV)) {
+      if ((state_pin_customer_hv_on == !ILL_PIN_TRIGGER_INPUT) && (global_data_A36772.previous_state_pin_customer_hv_on == ILL_PIN_TRIGGER_INPUT)) {
         global_data_A36772.reset_active = 1;
       } else {
         global_data_A36772.reset_active = 0;
@@ -1663,19 +1724,19 @@ void UpdateLEDandStatusOutuputs(void) {
   // Warmup status
   if ((global_data_A36772.control_state >= STATE_START_UP) && (global_data_A36772.control_state <= STATE_HEATER_WARM_UP)) {
     PIN_LED_WARMUP = OLL_LED_ON;
-    PIN_CPU_WARMUP_STATUS = OLL_STATUS_ACTIVE;
+    PIN_CPU_SWITCH_BIT0_ENABLE = OLL_STATUS_ACTIVE;
   } else {
     PIN_LED_WARMUP = !OLL_LED_ON;
-    PIN_CPU_WARMUP_STATUS = !OLL_STATUS_ACTIVE;
+    PIN_CPU_SWITCH_BIT0_ENABLE = !OLL_STATUS_ACTIVE;
   }
   
   // Standby Status
   if (global_data_A36772.control_state == STATE_HEATER_WARM_UP_DONE) {
     PIN_LED_STANDBY = OLL_LED_ON;
-    PIN_CPU_STANDBY_STATUS = OLL_STATUS_ACTIVE;
+    PIN_CPU_SWITCH_BIT1_ENABLE = OLL_STATUS_ACTIVE;
   } else {
     PIN_LED_STANDBY = !OLL_LED_ON;
-    PIN_CPU_STANDBY_STATUS = !OLL_STATUS_ACTIVE;
+    PIN_CPU_SWITCH_BIT1_ENABLE = !OLL_STATUS_ACTIVE;
   }
   
   // HV ON Status
@@ -1683,17 +1744,17 @@ void UpdateLEDandStatusOutuputs(void) {
     // FLASH THE HV ON LED
     if (global_data_A36772.run_time_counter & 0x0010) {
       PIN_LED_HV_ON = OLL_LED_ON;
-      PIN_CPU_HV_ON_STATUS = OLL_STATUS_ACTIVE;
+      PIN_CPU_SWITCH_BIT2_ENABLE = OLL_STATUS_ACTIVE;
     } else {
       PIN_LED_HV_ON = !OLL_LED_ON;
-      PIN_CPU_HV_ON_STATUS = !OLL_STATUS_ACTIVE;
+      PIN_CPU_SWITCH_BIT2_ENABLE = !OLL_STATUS_ACTIVE;
     }
   } else if (global_data_A36772.control_state >= STATE_HV_ON) {
     PIN_LED_HV_ON = OLL_LED_ON;
-    PIN_CPU_HV_ON_STATUS = OLL_STATUS_ACTIVE;
+    PIN_CPU_SWITCH_BIT2_ENABLE = OLL_STATUS_ACTIVE;
   } else {
     PIN_LED_HV_ON = !OLL_LED_ON;
-    PIN_CPU_HV_ON_STATUS = !OLL_STATUS_ACTIVE;
+    PIN_CPU_SWITCH_BIT2_ENABLE = !OLL_STATUS_ACTIVE;
   }
   
   // Beam enabled Status
@@ -1708,10 +1769,10 @@ void UpdateLEDandStatusOutuputs(void) {
   // System OK Status
 //  if (global_data_A36772.control_state <= STATE_FAULT_HEATER_ON) {
   if (_FAULT_REGISTER != 0) {
-    PIN_CPU_SYSTEM_OK_STATUS = !OLL_STATUS_ACTIVE;
+    PIN_CPU_SWITCH_BIT3_ENABLE = !OLL_STATUS_ACTIVE;
     PIN_LED_SYSTEM_OK = !OLL_LED_ON;
   } else {
-    PIN_CPU_SYSTEM_OK_STATUS = OLL_STATUS_ACTIVE;
+    PIN_CPU_SWITCH_BIT3_ENABLE = OLL_STATUS_ACTIVE;
     PIN_LED_SYSTEM_OK = OLL_LED_ON;
   }
 }
@@ -2318,49 +2379,8 @@ unsigned char SPICharInverted(unsigned char transmit_byte) {
 }
 
 
-void ETMDigitalInitializeInput(TYPE_DIGITAL_INPUT* input, unsigned int initial_value, unsigned int filter_time) {
-  if (filter_time > 0x7000) {
-    filter_time = 0x7000;
-  }
-  input->filter_time = filter_time;
-  if (initial_value == 0) {
-    input->accumulator = 0;
-    input->filtered_reading = 0;
-  } else {
-    input->accumulator = (filter_time << 1);
-    input->filtered_reading = 1;
-  }
-}
 
 
-void ETMDigitalUpdateInput(TYPE_DIGITAL_INPUT* input, unsigned int current_value) {
-  if (input->filter_time < 2) {
-    input->filtered_reading = current_value;
-  } else {
-    if (current_value) {
-      if (++input->accumulator > (input->filter_time << 1)) {
-	input->accumulator--;
-      }
-    } else {
-      if (input->accumulator) {
-	input->accumulator--;
-      }
-    }
-    if (input->accumulator >= input->filter_time) {
-      if (input->filtered_reading == 0) {
-	// we are changing state from low to high
-	input->accumulator = (input->filter_time << 1);
-      }
-      input->filtered_reading = 1;
-    } else {
-      if (input->filtered_reading == 1) {
-	// we are changing state from high to low
-	input->accumulator = 0;
-      }
-      input->filtered_reading = 0;
-    }
-  }
-}
 
 
 void __attribute__((interrupt, no_auto_psv)) _ADCInterrupt(void) {
@@ -2372,21 +2392,16 @@ void __attribute__((interrupt, no_auto_psv)) _ADCInterrupt(void) {
     global_data_A36772.pot_ek.adc_accumulator       += ADCBUF0;
     global_data_A36772.pot_vtop.adc_accumulator     += ADCBUF1;
     global_data_A36772.pot_htr.adc_accumulator      += ADCBUF2;
-    global_data_A36772.ref_htr.adc_accumulator      += ADCBUF3;
-    global_data_A36772.ref_vtop.adc_accumulator     += ADCBUF4;
-    global_data_A36772.ref_ek.adc_accumulator       += ADCBUF5;
-    global_data_A36772.pos_15v_mon.adc_accumulator  += ADCBUF6;
-    global_data_A36772.neg_15v_mon.adc_accumulator  += ADCBUF7;
+    global_data_A36772.pos_15v_mon.adc_accumulator  += ADCBUF3;
+    global_data_A36772.neg_15v_mon.adc_accumulator  += ADCBUF4;
+
   } else {
     // read ADCBUF 8-15
     global_data_A36772.pot_ek.adc_accumulator       += ADCBUF8;
     global_data_A36772.pot_vtop.adc_accumulator     += ADCBUF9;
     global_data_A36772.pot_htr.adc_accumulator      += ADCBUFA;
-    global_data_A36772.ref_htr.adc_accumulator      += ADCBUFB;
-    global_data_A36772.ref_vtop.adc_accumulator     += ADCBUFC;
-    global_data_A36772.ref_ek.adc_accumulator       += ADCBUFD;
-    global_data_A36772.pos_15v_mon.adc_accumulator  += ADCBUFE;
-    global_data_A36772.neg_15v_mon.adc_accumulator  += ADCBUFF;
+    global_data_A36772.pos_15v_mon.adc_accumulator  += ADCBUFB;
+    global_data_A36772.neg_15v_mon.adc_accumulator  += ADCBUFC;
   }
   
   global_data_A36772.accumulator_counter += 1;
@@ -2398,9 +2413,6 @@ void __attribute__((interrupt, no_auto_psv)) _ADCInterrupt(void) {
     global_data_A36772.pot_htr.adc_accumulator      >>= 3;
     global_data_A36772.pot_vtop.adc_accumulator     >>= 3; 
     global_data_A36772.pot_ek.adc_accumulator       >>= 3; 
-    global_data_A36772.ref_htr.adc_accumulator      >>= 3; 
-    global_data_A36772.ref_vtop.adc_accumulator     >>= 3; 
-    global_data_A36772.ref_ek.adc_accumulator       >>= 3; 
     global_data_A36772.pos_15v_mon.adc_accumulator  >>= 3; 
     global_data_A36772.neg_15v_mon.adc_accumulator  >>= 3; 
 
@@ -2408,19 +2420,13 @@ void __attribute__((interrupt, no_auto_psv)) _ADCInterrupt(void) {
     global_data_A36772.pot_htr.filtered_adc_reading = global_data_A36772.pot_htr.adc_accumulator;
     global_data_A36772.pot_vtop.filtered_adc_reading = global_data_A36772.pot_vtop.adc_accumulator;
     global_data_A36772.pot_ek.filtered_adc_reading = global_data_A36772.pot_ek.adc_accumulator;
-    global_data_A36772.ref_htr.filtered_adc_reading = global_data_A36772.ref_htr.adc_accumulator;
-    global_data_A36772.ref_vtop.filtered_adc_reading = global_data_A36772.ref_vtop.adc_accumulator;
-    global_data_A36772.ref_ek.filtered_adc_reading = global_data_A36772.ref_ek.adc_accumulator;
     global_data_A36772.pos_15v_mon.filtered_adc_reading = global_data_A36772.pos_15v_mon.adc_accumulator;
     global_data_A36772.neg_15v_mon.filtered_adc_reading = global_data_A36772.neg_15v_mon.adc_accumulator;
     
     // clear the accumulators
     global_data_A36772.pot_htr.adc_accumulator      = 0;
     global_data_A36772.pot_vtop.adc_accumulator     = 0; 
-    global_data_A36772.pot_ek.adc_accumulator       = 0; 
-    global_data_A36772.ref_htr.adc_accumulator      = 0; 
-    global_data_A36772.ref_vtop.adc_accumulator     = 0; 
-    global_data_A36772.ref_ek.adc_accumulator       = 0; 
+    global_data_A36772.pot_ek.adc_accumulator       = 0;  
     global_data_A36772.pos_15v_mon.adc_accumulator  = 0; 
     global_data_A36772.neg_15v_mon.adc_accumulator  = 0; 
   }
@@ -2435,100 +2441,15 @@ void ETMAnalogClearFaultCounters(AnalogInput* ptr_analog_input) {
 }
 
 
-//void ETMCanSpoofPulseSyncNextPulseLevel(void) {
-//  ETMCanMessage message;
-//  message.identifier = ETM_CAN_MSG_LVL_TX | (ETM_CAN_ADDR_PULSE_SYNC_BOARD << 3); 
-//  message.word0      = next_pulse_count;
-//  message.word1    = 0xFFFF;
-//  ETMCanTXMessage(&message, &C2TX2CON);
-//}
-//
 
-//void ETMCanSpoofAFCHighSpeedDataLog(void) {
-//  unsigned int packet_id;
-//
-//  // Spoof HV Lambda Packet 0x4C
-//  ETMCanMessage log_message;
-//  
-//  packet_id = 0x004C;
-//  packet_id <<= 1;
-//  packet_id |= 0b0000011000000000;
-//  packet_id <<= 2;
-//  
-//  log_message.identifier = packet_id;
-//  log_message.identifier &= 0xFF00;
-//  log_message.identifier <<= 3;
-//  log_message.identifier |= (packet_id & 0x00FF);
-//  
-//  log_message.word3 = next_pulse_count-1;
-//  log_message.word2 = global_data_A36772.heater_voltage_target;
-//  log_message.word1 = global_data_A36772.analog_output_heater_voltage.set_point;
-//  log_message.word0 = global_data_A36772.pot_htr.reading_scaled_and_calibrated;
-//  
-//  ETMCanAddMessageToBuffer(&etm_can_tx_message_buffer, &log_message);
-//  MacroETMCanCheckTXBuffer();
-//
-//  // Spoof Pulse Sync Packet 0x3C
-//  
-//  packet_id = 0x003C;
-//  packet_id <<= 1;
-//  packet_id |= 0b0000011000000000;
-//  packet_id <<= 2;
-//  
-//  log_message.identifier = packet_id;
-//  log_message.identifier &= 0xFF00;
-//  log_message.identifier <<= 3;
-//  log_message.identifier |= (packet_id & 0x00FF);
-//  
-//  log_message.word3 = next_pulse_count-1;//local_debug_data.debug_4;
-//  log_message.word2 = global_data_A36772.control_state;
-//  log_message.word1 = global_data_A36772.input_htr_v_mon.reading_scaled_and_calibrated;
-//  log_message.word0 = global_data_A36772.input_htr_i_mon.reading_scaled_and_calibrated;
-//  
-//  ETMCanAddMessageToBuffer(&etm_can_tx_message_buffer, &log_message);
-//  MacroETMCanCheckTXBuffer();
-//
-//}
 
 void ETMCanSlaveExecuteCMDBoardSpecific(ETMCanMessage* message_ptr) {
   unsigned int index_word;
 
   index_word = message_ptr->word3;
-  switch (index_word) {
-
-    case ETM_CAN_REGISTER_GUN_DRIVER_SET_1_GRID_TOP_SET_POINT:
-      global_data_A36772.can_pulse_top_set_point = message_ptr->word1;
-      global_data_A36772.control_config |= 1;
-      if (global_data_A36772.control_config == 3){
-      _CONTROL_NOT_CONFIGURED = 0;
-      }
-      break;
-
-    case ETM_CAN_REGISTER_GUN_DRIVER_SET_1_HEATER_CATHODE_SET_POINT:
-      global_data_A36772.can_high_voltage_set_point = message_ptr->word1;
-      global_data_A36772.can_heater_voltage_set_point = message_ptr->word0;
-
-      global_data_A36772.control_config |= 2;
-      if (global_data_A36772.control_config == 3){
-      _CONTROL_NOT_CONFIGURED = 0;
-      }
-      break;
-      
-    case ETM_CAN_REGISTER_GUN_DRIVER_RESET_FPGA:
-      if (global_data_A36772.control_state < STATE_POWER_SUPPLY_RAMP_UP) {
-        ResetFPGA();
-        global_data_A36772.control_state = STATE_WAIT_FOR_CONFIG;
-      }
-      
-      break;
-
-    default:
-//      local_can_errors.invalid_index++;
-      break;
-      
-    }
 
 }
+
 
 #ifdef __noModbusLibrary
 
@@ -2600,93 +2521,6 @@ void ETMModbusInit(void) {
   ETM_modbus_state = MODBUS_STATE_IDLE;
 }
 
-/*    
-void ETMModbusSlaveDoModbus(void) {
-  unsigned char test;
-  switch (ETM_modbus_state) {
-      
-    case MODBUS_STATE_IDLE:
-//      PIN_RS485_ENABLE = 0;
-      if (modbus_transmission_needed) {
-        if (ModbusTimer >= MODBUS_200ms_DELAY) {
-          ModbusTimer = 0;
-          if (current_command_ptr.done == ETMMODBUS_COMMAND_OK) {
-            CheckValidData(&current_command_ptr);
-            CheckDeviceFailure(&current_command_ptr);
-          }
-//          modbus_transmission_needed = 0;
-          ETM_modbus_state = MODBUS_STATE_TRANSMITTING;
-        }
-      } else if (modbus_receiving_flag) {
-        ETM_modbus_state = MODBUS_STATE_RECEIVING;
-      }
-      break;
-  
-    case MODBUS_STATE_RECEIVING:  
-      ReceiveCommand(&current_command_ptr);
-      if (current_command_ptr.done == ETMMODBUS_COMMAND_OK) {
-        current_command_ptr.done = 0;
-        ModbusTimer = 0;      //start 200ms timer
-        PIN_RS485_ENABLE = 1;
-        modbus_receiving_flag = 0;
-        ETM_modbus_state = MODBUS_STATE_PROCESSING;
-      } else if (current_command_ptr.done ==  ETMMODBUS_ERROR_FUNCTION) {
-        current_command_ptr.done = 0;
-        ModbusTimer = 0;      //start 200ms timer
-        PIN_RS485_ENABLE = 1;
-        ETM_last_modbus_fail = ETMMODBUS_ERROR_FUNCTION;
-        modbus_transmission_needed = 1;
-        modbus_receiving_flag = 0;
-        ETM_modbus_state = MODBUS_STATE_IDLE;
-      } else if (current_command_ptr.done) {
-        current_command_ptr.done = 0;
-        ETM_last_modbus_fail = current_command_ptr.done;
-        modbus_receiving_flag = 0;
-        ETM_modbus_state = MODBUS_STATE_IDLE;
-      }  
-      break;
-    
-    case MODBUS_STATE_PROCESSING:
-      ProcessCommand (&current_command_ptr);
-      modbus_transmission_needed = 1;
-      ETM_modbus_state = MODBUS_STATE_IDLE;
-      break;
-    
-    case MODBUS_STATE_TRANSMITTING:
-      if (modbus_transmission_needed != 0) {
-        modbus_transmission_needed = 0;
-        SendResponse(&current_command_ptr);
-    //    ClearModbusMessage(&current_command_ptr);
-//TEST BUFFER FILL
-//        for (test = 27; test < 34; test++) {  
-//          BufferByte64WriteByte(&uart1_output_buffer, test);
-//        }
-        ModbusTest++;
-        while ((!U1STAbits.UTXBF) && (BufferByte64BytesInBuffer(&uart1_output_buffer))) {
-          U1TXREG = BufferByte64ReadByte(&uart1_output_buffer);
-        }
-      }
-//      PIN_RS485_ENABLE = 1;
-//      while (BufferByte64BytesInBuffer(&uart1_output_buffer)) {
-//        if (!U1STAbits.UTXBF) {
-//          U1TXREG = BufferByte64ReadByte(&uart1_output_buffer);
-//        }
-//        Nop();
-//      }
-      if ((U1STAbits.TRMT == 1) && (!BufferByte64BytesInBuffer(&uart1_output_buffer))) {
-        ETM_modbus_state = MODBUS_STATE_IDLE;
-        PIN_RS485_ENABLE = 0;
-        modbus_receiving_flag = 0;
-      }
-      break;
-
-    default:
-      ETM_modbus_state = MODBUS_STATE_IDLE;
-      break;
-    
-  }
-}    
-*/
 
 void ETMModbusSlaveDoModbus(void) {
   if (!modbus_transmission_needed) {
@@ -2930,211 +2764,7 @@ void ProcessCommand (MODBUS_MESSAGE * ptr) {
   }
 }    
 
-/*
-//this is the function for parsing and processing 
-void ReceiveCommand(MODBUS_MESSAGE * cmd_ptr) {
 
-  unsigned int crc, crc_in, i;
-  unsigned char cmd_byte[8];
-  
-  if (BufferByte64BytesInBuffer(&uart1_input_buffer) >= ETMMODBUS_COMMAND_SIZE_MIN) {   
-    for (i=0; i<ETMMODBUS_COMMAND_SIZE_MIN; i++){
-      cmd_byte[i] = BufferByte64ReadByte(&uart1_input_buffer);
-    }
-    while (BufferByte64IsNotEmpty(&uart1_input_buffer)) {
-      i = BufferByte64ReadByte(&uart1_input_buffer);
-    }
-    crc_in = (cmd_byte[7] << 8) + cmd_byte[6];
-    crc = checkCRC(cmd_byte, 6); 
-    if (crc_in != crc) {
-      cmd_ptr->done = ETMMODBUS_ERROR_CRC;    
-      return;
-    } else {
-      if ((cmd_byte[0] & 0xFF) != MODBUS_SLAVE_ADDR) {
-        cmd_ptr->done = ETMMODBUS_ERROR_SLAVE_ADDR;
-        return;
-      } else {
-      	if (cmd_byte[1] & 0x80) {
-          cmd_ptr->done = ETMMODBUS_ERROR_FUNCTION;
-          cmd_ptr->received_function_code = cmd_byte[1];
-          cmd_ptr->function_code = EXCEPTION_FLAGGED;
-          cmd_ptr->exception_code = ILLEGAL_FUNCTION;
-        } else {
-//          _T1IF = 0;      // start 200ms timer
-          cmd_ptr->done = ETMMODBUS_COMMAND_OK;
-          cmd_ptr->function_code = cmd_byte[1] & 0x7F;
-          cmd_ptr->data_address = (cmd_byte[2] << 8) + cmd_byte[3];
-          switch (cmd_ptr->function_code) {
-            case FUNCTION_READ_BITS:
-              cmd_ptr->qty_bits = (cmd_byte[4] << 8) + cmd_byte[5];
-              break;
-            
-            case FUNCTION_READ_REGISTERS:  
-            case FUNCTION_READ_INPUT_REGISTERS:  
-              cmd_ptr->qty_reg = (cmd_byte[4] << 8) + cmd_byte[5];                
-              break;
-    
-            case FUNCTION_WRITE_BIT:
-            case FUNCTION_WRITE_REGISTER:
-              cmd_ptr->write_value = (cmd_byte[4] << 8) + cmd_byte[5];
-              break;
-    
-            default:
-              cmd_ptr->done = ETMMODBUS_ERROR_FUNCTION;
-              cmd_ptr->received_function_code = cmd_ptr->function_code;
-              cmd_ptr->function_code = EXCEPTION_FLAGGED;
-              cmd_ptr->exception_code = ILLEGAL_FUNCTION;
-              break;
-          }                      
-        }
-      }
-    }
-  }  
-}
-
-
-void ProcessCommand (MODBUS_MESSAGE * ptr) {
-  unsigned int coil_index;
-  unsigned char bit_index;
-  unsigned int byte_index;
-  unsigned char byte_count;
-  unsigned char last_bits;
-  unsigned char data_index;
-  unsigned int data_length_words;
-  
-  modbus_slave_invalid_data = 0;
-  
-  switch (ptr->function_code) {
-      
-    case FUNCTION_READ_BITS:
-
-      if ((ptr->data_address + ptr->qty_bits) > SLAVE_BIT_ARRAY_SIZE) {
-        ptr->received_function_code = ptr->function_code;
-        ptr->function_code = EXCEPTION_FLAGGED;
-        ptr->exception_code = ILLEGAL_ADDRESS;
-        break;  
-      }
-
-      if (ptr->qty_bits <= 8) {
-        ptr->data_length_bytes = 1;
-      } else if (ptr->qty_bits & 0x0007) {
-        ptr->data_length_bytes = ((ptr->qty_bits /8) + 1) & 0xff;
-      } else {
-        ptr->data_length_bytes = (ptr->qty_bits /8) & 0xff;
-      }
-        
-      byte_count = ptr->qty_bits / 8;
-      last_bits = ptr->qty_bits & 0x07;
-      
-      if (ptr->qty_bits == 1) {
-        if (ModbusSlaveBit[ptr->data_address]) {
-          ptr->bit_data[0] = 0x01;
-        } else {
-          ptr->bit_data[0] = 0x00;
-        }
-      } else {
-        byte_index = 0;
-        while (byte_index < byte_count) { 
-          coil_index = ptr->data_address;
-          bit_index = 0;
-          ptr->bit_data[byte_index] = 0;
-          while (bit_index < 8) {
-            if (ModbusSlaveBit[coil_index]) {
-              ptr->bit_data[byte_index] |= (0x01 << bit_index);
-            }
-            bit_index++;
-            coil_index++;
-          } 
-          byte_index++;
-        }
-        if (last_bits) {
-          bit_index = 0;
-          ptr->bit_data[byte_index] = 0;
-          while (bit_index < 8) {
-            if (bit_index < last_bits) {
-              if (ModbusSlaveBit[coil_index] != 0) {
-                ptr->bit_data[byte_index] |= (0x01 << bit_index);
-                coil_index++;
-              }  
-            }
-            bit_index++;            
-          }      
-          
-        }
-      }
-      break;
-      
-    case FUNCTION_READ_REGISTERS:         
-        
-      if ((ptr->data_address + ptr->qty_reg) >= SLAVE_HOLD_REG_ARRAY_SIZE) {
-        ptr->received_function_code = ptr->function_code;
-        ptr->function_code = EXCEPTION_FLAGGED;
-        ptr->exception_code = ILLEGAL_ADDRESS;
-        break;  
-      }
-      data_length_words = ptr->qty_reg;
-      byte_index = 0;
-      data_index = 0;
-      while (data_length_words) {
-        ptr->data[data_index] =  ModbusSlaveHoldingRegister[ptr->data_address + byte_index];
-        byte_index++;
-        data_index++;
-        data_length_words--;
-      } 
-      break;
-      
-    case FUNCTION_READ_INPUT_REGISTERS:
-        
-      if ((ptr->data_address + ptr->qty_reg) >= SLAVE_INPUT_REG_ARRAY_SIZE) {
-        ptr->received_function_code = ptr->function_code;
-        ptr->function_code = EXCEPTION_FLAGGED;
-        ptr->exception_code = ILLEGAL_ADDRESS;
-        break;  
-      }
-      data_length_words = ptr->qty_reg;
-      byte_index = 0;
-      data_index = 0;
-      while (data_length_words) {
-        ptr->data[data_index] =  ModbusSlaveInputRegister[ptr->data_address + byte_index];
-        byte_index++;
-        data_index++;
-        data_length_words--;
-      }
-      break;
-      
-    case FUNCTION_WRITE_BIT:
-      if (ptr->data_address >= SLAVE_BIT_ARRAY_SIZE) {
-        ptr->received_function_code = ptr->function_code;
-        ptr->function_code = EXCEPTION_FLAGGED;
-        ptr->exception_code = ILLEGAL_ADDRESS;
-        break;  
-      }
-      coil_index = ptr->data_address;
-      if ((ptr->write_value == 0x0000) || (ptr->write_value == 0xFF00)) {
-        ModbusSlaveBit[coil_index] = ptr->write_value;
-      } else {
-        ptr->received_function_code = ptr->function_code;
-        ptr->function_code = EXCEPTION_FLAGGED;
-        ptr->exception_code = ILLEGAL_VALUE;
-      }     
-      break;
-      
-    case FUNCTION_WRITE_REGISTER:
-      if (ptr->data_address >= SLAVE_HOLD_REG_ARRAY_SIZE) {
-        ptr->received_function_code = ptr->function_code;
-        ptr->function_code = EXCEPTION_FLAGGED;
-        ptr->exception_code = ILLEGAL_ADDRESS;
-        break;  
-      }
-      byte_index = ptr->data_address;
-      ModbusSlaveHoldingRegister[byte_index] = ptr->write_value;
-      break;
-      
-    default:
-  	  break;
-  }
-}    
- */
 
 void CheckValidData(MODBUS_MESSAGE * ptr) {
     
@@ -3366,3 +2996,109 @@ void __attribute__((interrupt, no_auto_psv)) _U1TXInterrupt(void) {
 
 
 #endif
+
+#define MIN_PERIOD 150 // 960uS 1041 Hz// 
+void __attribute__((interrupt(__save__(CORCON,SR)), no_auto_psv)) _INT3Interrupt(void) {
+  // A trigger was recieved.
+  // THIS DOES NOT MEAN THAT A PULSE WAS GENERATED
+  // If (PIN_CPU_XRAY_ENABLE_OUT == OLL_CPU_XRAY_ENABLE)  && (PIN_CUSTOMER_XRAY_ON_IN == ILL_CUSTOMER_BEAM_ENABLE) then we "Probably" generated a pulse
+
+    
+    
+    
+  if ((TMR1 > MIN_PERIOD) || _T1IF) {
+    // Calculate the Trigger PRF
+    // TMR1 is used to time the time between INT3 interrupts
+    global_data_A36772.last_period = TMR1;
+    TMR1 = 0;
+    if (_T1IF) {
+      // The timer exceed it's period of 400mS - (Will happen if the PRF is less than 2.5Hz)
+      global_data_A36772.last_period = 62501;  // This will indicate that the PRF is Less than 2.5Hz
+    }
+    /*
+      if (ETMCanSlaveGetSyncMsgPulseSyncDisableHV() || ETMCanSlaveGetSyncMsgPulseSyncDisableXray()) {
+      // We are not pulsing so set the PRF to the minimum
+      global_data_A36772.last_period = 62501;  // This will indicate that the PRF is Less than 2.5Hz
+      }
+    */
+    _T1IF = 0;
+    
+    global_data_A36772.trigger_complete = 1;
+    global_data_A36772.this_pulse_level_energy_command = global_data_A36772.next_pulse_level_energy_command;
+    uart2_next_byte = 0;
+  }
+  _INT3IF = 0;		// Clear Interrupt flag
+}  
+
+
+
+
+
+  switch(global_data_A36772.dose_switch_value){ 
+    case DOSE_0:
+      message0_dose = 0x10;
+      break;
+    
+    case DOSE_1:
+      message0_dose = 0x20;
+      break;
+      
+    case DOSE_2:
+      message0_dose = 0x30;
+      break;
+      
+    case DOSE_3:
+      message0_dose = 0x40;
+      break;
+      
+    case DOSE_4:
+      message0_dose = 0x50;
+      break;
+      
+    case DOSE_5:
+      message0_dose = 0x60;
+      break;
+      
+    case DOSE_6:
+      message0_dose = 0x70;
+      break;
+      
+    case DOSE_7:
+      message0_dose = 0x80;
+      break;
+      
+    case DOSE_8:
+      message0_dose = 0x90;
+      break;
+      
+    case DOSE_9:
+      message0_dose = 0xA0;
+      break;
+      
+    case DOSE_A:
+      message0_dose = 0xB0;
+      break;
+      
+    case DOSE_B:
+      message0_dose = 0xC0;
+      break;
+      
+    case DOSE_C:
+      message0_dose = 0xD0;
+      break;
+      
+    case DOSE_D:
+      message0_dose = 0xE0;
+      break;
+      
+    case DOSE_E:
+      message0_dose = 0xF0;
+      break;
+      
+    case DOSE_F:
+      message0_dose = 0xFF;
+      break;
+      
+    default:
+      
+  } 
