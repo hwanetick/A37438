@@ -40,22 +40,24 @@ unsigned int checkCRC(unsigned char * ptr, unsigned int size);
 TYPE_GLOBAL_DATA_A36772 global_data_A36772;
 LTC265X U32_LTC2654;
 
-const unsigned char Dose_Array[16] = DOSE_LOOKUP_VALUES;
-const unsigned int CRC_High_Energy[16] = CRC_HIGH_ENERGY_LOOKUP_VALUES;
-const unsigned int CRC_Low_Energy[16] = CRC_LOW_ENERGY_LOOKUP_VALUES;
+const unsigned char Dose_Array[16] = {DOSE_LOOKUP_VALUES};
+const unsigned int CRC_High_Energy[16] = {CRC_HIGH_ENERGY_LOOKUP_VALUES};
+const unsigned int CRC_Low_Energy[16] = {CRC_LOW_ENERGY_LOOKUP_VALUES};
 
 
 int main(void) {
   InitializeA36772();
-  global_data_A36772.run_time_counter = 0;
-  _T2IF = 0;
-  while (global_data_A36772.run_time_counter < 300) {
-    if (_T2IF) {
-      _T2IF = 0;
-      DoStartupLEDs();
-      global_data_A36772.run_time_counter++;
-    } 
-  }
+  _CONTROL_NOT_CONFIGURED = 0;
+  _CONTROL_NOT_READY = 1;
+//  global_data_A36772.run_time_counter = 0;
+//  _T2IF = 0;
+//  while (global_data_A36772.run_time_counter < 300) {
+//    DoStartupLEDs();
+//    if (_T2IF) {
+//      _T2IF = 0;
+//      global_data_A36772.run_time_counter++;
+//    } 
+//  }
  
   while (1) {
     DoA36772();
@@ -94,7 +96,7 @@ void InitializeA36772(void) {
   TRISG = A36772_TRISG_VALUE;
 
 //  // Config SPI1 for Gun Driver
-//  ConfigureSPI(ETM_SPI_PORT_1, A36772_SPI1CON_VALUE, 0, A36772_SPI1STAT_VALUE, SPI_CLK_1_MBIT, FCY_CLK);  
+  ConfigureSPI(ETM_SPI_PORT_1, A36772_SPI1CON_VALUE, 0, A36772_SPI1STAT_VALUE, SPI_CLK_1_MBIT, FCY_CLK);  
 //  
 
   	  // Initialize application specific hardware
@@ -119,12 +121,12 @@ void InitializeA36772(void) {
       
   
   // ---------- Configure Timers ----------------- //
-          // Initialize TMR1
-  PR1   = A36772_PR1_VALUE;
-  TMR1  = 0;
-  _T1IF = 0;
-  _T1IP = 2;
-  T1CON = A36772_T1CON_VALUE;
+//          // Initialize TMR1
+//  PR1   = A36772_PR1_VALUE;
+//  TMR1  = 0;
+//  _T1IF = 0;
+//  _T1IP = 2;
+//  T1CON = A36772_T1CON_VALUE;
 
   // Initialize TMR2
   PR2   = A36772_PR2_VALUE;
@@ -134,21 +136,21 @@ void InitializeA36772(void) {
   _T2IP = 2;
   T2CON = A36772_T2CON_VALUE;
   
-      // Initialize TMR3
-  PR3   = A36772_PR3_VALUE;
-  TMR3  = 0;
-  _T3IF = 0;
-//  _T3IP = 5;
-  _T3IP = 2;
-  T3CON = A36772_T3CON_VALUE;
+//      // Initialize TMR3
+//  PR3   = A36772_PR3_VALUE;
+//  TMR3  = 0;
+//  _T3IF = 0;
+////  _T3IP = 5;
+//  _T3IP = 2;
+//  T3CON = A36772_T3CON_VALUE;
   
   
 
 //  // Configure on-board DAC
-//  SetupLTC265X(&U32_LTC2654, ETM_SPI_PORT_2, FCY_CLK, LTC265X_SPI_2_5_M_BIT, _PIN_RG15, _PIN_RC1);
+  SetupLTC265X(&U32_LTC2654, ETM_SPI_PORT_2, FCY_CLK, LTC265X_SPI_2_5_M_BIT, _PIN_RG15, _PIN_RC1);
 //
 //  //Configure EEPROM
-//  ETMEEPromConfigureExternalDevice(EEPROM_SIZE_8K_BYTES, FCY_CLK, 400000, EEPROM_I2C_ADDRESS_0, 1);
+  ETMEEPromConfigureExternalDevice(EEPROM_SIZE_8K_BYTES, FCY_CLK, 400000, EEPROM_I2C_ADDRESS_0, 1);
 //
 //  // ------------- Configure Internal ADC --------- //
 //  ADCON1 = ADCON1_SETTING;             // Configure the high speed ADC module based on H file parameters
@@ -248,13 +250,13 @@ void DoStartupLEDs(void) {
 
 void DoA36772(void) {
   
-#ifdef __CAN_ENABLED
+//#ifdef __CAN_ENABLED
   ETMCanSlaveDoCan();
-#endif
+//#endif
 
-#ifndef __CAN_REQUIRED
+//#ifndef __CAN_REQUIRED
   ClrWdt();
-#endif
+//#endif
   
   
   unsigned int crc_int;
@@ -342,6 +344,9 @@ void DoA36772(void) {
       global_data_A36772.dose_switch_value &= ~0x08;
     }
 
+    if (global_data_A36772.dose_switch_value > 15) {
+      global_data_A36772.dose_switch_value = 0;
+    }
 
     global_data_A36772.run_time_counter++;
 
@@ -353,9 +358,9 @@ void DoA36772(void) {
  
 
     ETMCanSlaveSetDebugRegister(0xA, global_data_A36772.dose_switch_value);
-    //ETMCanSlaveSetDebugRegister(0xB, global_data_A36772.pot_vtop.reading_scaled_and_calibrated);
-    //ETMCanSlaveSetDebugRegister(0xC, global_data_A36772.pot_ek.reading_scaled_and_calibrated);
-    //ETMCanSlaveSetDebugRegister(0xD, global_data_A36772.ref_htr.reading_scaled_and_calibrated);
+    ETMCanSlaveSetDebugRegister(0xB, global_data_A36772.message0_dose);
+    ETMCanSlaveSetDebugRegister(0xC, PIN_SW_BIT0_STATUS);
+    ETMCanSlaveSetDebugRegister(0xD, PIN_SW_BIT1_STATUS);
     //ETMCanSlaveSetDebugRegister(0xE, global_data_A36772.ref_vtop.reading_scaled_and_calibrated);//
     //ETMCanSlaveSetDebugRegister(0xF, global_data_A36772.ref_ek.reading_scaled_and_calibrated);
 //    ETMCanSlaveSetDebugRegister(0xA, global_data_A36772.monitor_grid_voltage.set_point); //run_time_counter);
@@ -363,7 +368,7 @@ void DoA36772(void) {
 //    ETMCanSlaveSetDebugRegister(0xC, global_data_A36772.ref_vtop.reading_scaled_and_calibrated); //power_supply_startup_remaining);
 //    ETMCanSlaveSetDebugRegister(0xD, global_data_A36772.heater_warm_up_time_remaining);
 //    ETMCanSlaveSetDebugRegister(0xE, global_data_A36772.heater_ramp_up_time);
-//    ETMCanSlaveSetDebugRegister(0xF, global_data_A36772.control_state);
+    ETMCanSlaveSetDebugRegister(0xF, global_data_A36772.run_time_counter);
     
 //    ETMCanSlaveSetDebugRegister(0xA, _FPGA_FIRMWARE_MINOR_REV_MISMATCH);
 //    ETMCanSlaveSetDebugRegister(0xB, fpga_bits.fpga_firmware_minor_rev);
