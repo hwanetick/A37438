@@ -83,6 +83,12 @@ void InitializeA36772(void) {
   
   
   // --------- BEGIN IO PIN CONFIGURATION ------------------
+  
+    // Initialize Ouput Pin Latches BEFORE setting the pins to Output
+  PIN_CS_DAC = !OLL_PIN_CS_DAC_SELECTED;
+  PIN_CS_ADC = !OLL_PIN_CS_ADC_SELECTED;
+  PIN_CS_FPGA = !OLL_PIN_CS_FPGA_SELECTED;
+	  
 	  
   // ---- Configure the dsPIC ADC Module Analog Inputs------------ //
   ADPCFG = 0xFFFF;             // all are digital I/O
@@ -192,11 +198,11 @@ void InitializeA36772(void) {
   PIN_RS485_ENABLE = 1;
   
   
-#ifdef __CAN_ENABLED
+//#ifdef __CAN_ENABLED
   // Initialize the Can module
   ETMCanSlaveInitialize(CAN_PORT_2, FCY_CLK, ETM_CAN_ADDR_GUN_DRIVER_BOARD, _PIN_RC4, 4, _PIN_RC3, _PIN_RC3);
   ETMCanSlaveLoadConfiguration(36772, BOARD_DASH_NUMBER, FIRMWARE_AGILE_REV, FIRMWARE_BRANCH, FIRMWARE_MINOR_REV);
-#endif
+//#endif
 
 
   ETMDigitalInitializeInput(&global_data_A36772.switch_bit_0, 0, 50);
@@ -514,8 +520,8 @@ void __attribute__((interrupt, no_auto_psv)) _U1TXInterrupt(void) {
 
 }
 
-
-
+//
+//
 #define MIN_PERIOD 150 // 960uS 1041 Hz// 
 void __attribute__((interrupt(__save__(CORCON,SR)), no_auto_psv)) _INT3Interrupt(void) {
   // A trigger was recieved.
