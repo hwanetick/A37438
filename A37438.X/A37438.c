@@ -49,15 +49,15 @@ int main(void) {
   InitializeA36772();
   _CONTROL_NOT_CONFIGURED = 0;
   _CONTROL_NOT_READY = 1;
-//  global_data_A36772.run_time_counter = 0;
-//  _T2IF = 0;
-//  while (global_data_A36772.run_time_counter < 300) {
-//    DoStartupLEDs();
-//    if (_T2IF) {
-//      _T2IF = 0;
-//      global_data_A36772.run_time_counter++;
-//    } 
-//  }
+  global_data_A36772.run_time_counter = 0;
+  _T2IF = 0;
+  while (global_data_A36772.run_time_counter < 300) {
+    DoStartupLEDs();
+    if (_T2IF) {
+      _T2IF = 0;
+      global_data_A36772.run_time_counter++;
+    } 
+  }
  
   while (1) {
     DoA36772();
@@ -190,7 +190,7 @@ void InitializeA36772(void) {
   _U1TXIF = 0;	// Clear the Transmit Interrupt Flag
   _U1TXIE = 1;	// Enable Transmit Interrupts
   _U1RXIF = 0;	// Clear the Recieve Interrupt Flag
-  _U1RXIE = 1;	// Enable Recieve Interrupts
+//  _U1RXIE = 1;	// Enable Recieve Interrupts
   
   
   U1MODEbits.UARTEN = 1;	// And turn the peripheral on
@@ -365,9 +365,9 @@ void DoA36772(void) {
 
     ETMCanSlaveSetDebugRegister(0xA, global_data_A36772.dose_switch_value);
     ETMCanSlaveSetDebugRegister(0xB, global_data_A36772.message0_dose);
-    ETMCanSlaveSetDebugRegister(0xC, PIN_SW_BIT0_STATUS);
-    ETMCanSlaveSetDebugRegister(0xD, PIN_SW_BIT1_STATUS);
-    //ETMCanSlaveSetDebugRegister(0xE, global_data_A36772.ref_vtop.reading_scaled_and_calibrated);//
+    ETMCanSlaveSetDebugRegister(0xC, global_data_A36772.message1_energy);
+    ETMCanSlaveSetDebugRegister(0xD, global_data_A36772.message4_crc_low);
+    ETMCanSlaveSetDebugRegister(0xE, global_data_A36772.message5_crc_high);//
     //ETMCanSlaveSetDebugRegister(0xF, global_data_A36772.ref_ek.reading_scaled_and_calibrated);
 //    ETMCanSlaveSetDebugRegister(0xA, global_data_A36772.monitor_grid_voltage.set_point); //run_time_counter);
 //    ETMCanSlaveSetDebugRegister(0xB, global_data_A36772.monitor_grid_voltage.dac_setting_scaled_and_calibrated); //fault_restart_remaining);
@@ -557,7 +557,13 @@ void __attribute__((interrupt(__save__(CORCON,SR)), no_auto_psv)) _INT3Interrupt
 }  
 
 
-
+void __attribute__((interrupt, no_auto_psv)) _DefaultInterrupt(void) {
+  // Clearly should not get here without a major problem occuring
+  // DPARKER do something to save the state into a RAM location that is not re-initialized and then reset
+  Nop();
+  Nop();
+  __asm__ ("Reset");
+}
 
 
 //  switch(global_data_A36772.dose_switch_value){ 

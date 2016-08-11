@@ -440,85 +440,6 @@ extern TYPE_GLOBAL_DATA_A36772 global_data_A36772;
 // ---------------------- FAULT & STATUS   CONFIGURATION ---------------------------- //
 
 
-
-
-#define _FAULT_FPGA_FIRMWARE_MAJOR_REV_MISMATCH        _FAULT_0 // CHECKED_DP// Heater Fault
-#define _FAULT_ADC_HV_V_MON_OVER_RELATIVE              _FAULT_1 // CHECKED_DP
-#define _FAULT_ADC_HV_V_MON_UNDER_RELATIVE             _FAULT_1 // CHECKED_DP
-#define _FAULT_ADC_HTR_V_MON_OVER_RELATIVE             _FAULT_2 // CHECKED_DP// Heater Fault
-#define _FAULT_ADC_HTR_V_MON_UNDER_RELATIVE            _FAULT_2 // CHECKED_DP// Heater Fault
-#define _FAULT_ADC_HTR_I_MON_OVER_ABSOLUTE             _FAULT_3 // CHECKED_DP// Heater Fault
-#define _FAULT_ADC_HTR_I_MON_UNDER_ABSOLUTE            _FAULT_4 // CHECKED_DP// Heater Fault
-#define _FAULT_ADC_TOP_V_MON_OVER_RELATIVE             _FAULT_5 // CHECKED_DP
-#define _FAULT_ADC_TOP_V_MON_UNDER_RELATIVE            _FAULT_5 // CHECKED_DP
-#define _FAULT_ADC_BIAS_V_MON_OVER_ABSOLUTE            _FAULT_6 // CHECKED_DP 
-#define _FAULT_ADC_BIAS_V_MON_UNDER_ABSOLUTE           _FAULT_6 // CHECKED_DP
-#define _FAULT_CAN_COMMUNICATION                       _FAULT_7 // CHECKED_DP// Heater Fault
-#define _FAULT_SPI_COMMUNICATION                       _FAULT_8
-#define _FAULT_ADC_DIGITAL_ARC                         _FAULT_9  // CHECKED_DP// This requires HV OFF
-#define _FAULT_ADC_DIGITAL_OVER_TEMP                   _FAULT_A  // CHECKED_DP// This requires a FPGA Reset (Goto Heater Off State)
-//#define _FAULT_CONVERTER_LOGIC_ADC_READ_FAILURE        _FAULT_B // CHECKED_DP// Heater Fault
-#define _FAULT_ADC_DIGITAL_GRID                        _FAULT_C  // CHECKED_DP// This requires a FPGA Reset (Goto Heater Off State)
-#define _FAULT_HEATER_VOLTAGE_CURRENT_LIMITED          _FAULT_D  // CHECKED_DP// Heater Fault
-#define _FAULT_HEATER_RAMP_TIMEOUT                     _FAULT_E  // CHECKED_DP// Heater Fault
-#define _FAULT_HEATER_STARTUP_FAILURE                  _FAULT_F
-
-
-#define _STATUS_CUSTOMER_HV_ON                         _WARNING_0
-#define _STATUS_CUSTOMER_BEAM_ENABLE                   _WARNING_1
-#define _STATUS_ADC_DIGITAL_HEATER_NOT_READY           _WARNING_2
-#define _STATUS_DAC_WRITE_FAILURE                      _WARNING_3
-//#define _STATUS_INTERLOCK_INHIBITING_HV                _WARNING_4
-//#define _STATUS_HEATER_AT_OPERATING_CURRENT            _WARNING_5
-//#define _FPGA_CUSTOMER_HARDWARE_REV_MISMATCH           _WARNING_6
-#define _FPGA_FIRMWARE_MINOR_REV_MISMATCH              _WARNING_6
-#define _FPGA_ARC_COUNTER_GREATER_ZERO                 _WARNING_7
-#define _FPGA_ARC_HIGH_VOLTAGE_INHIBIT_ACTIVE          _WARNING_7
-//#define _FPGA_MODULE_TEMP_GREATER_THAN_65_C            _WARNING_8
-#define _FPGA_MODULE_TEMP_GREATER_THAN_75_C            _WARNING_8
-//#define _FPGA_CURRENT_MONITOR_PULSE_WIDTH_FAULT        _WARNING_9
-#define _FPGA_GRID_MODULE_HARDWARE_FAULT               _WARNING_B
-#define _FPGA_GRID_MODULE_OVER_VOLTAGE_FAULT           _WARNING_B
-#define _FPGA_GRID_MODULE_UNDER_VOLTAGE_FAULT          _WARNING_B
-#define _FPGA_GRID_MODULE_BIAS_VOLTAGE_FAULT           _WARNING_B
-#define _FPGA_HV_REGULATION_WARNING                    _WARNING_C
-#define _FPGA_DIPSWITCH_1_ON                           _WARNING_D
-#define _FPGA_TEST_MODE_TOGGLE_SWITCH_TEST_MODE        _WARNING_E
-#define _FPGA_LOCAL_MODE_TOGGLE_SWITCH_LOCAL_MODE      _WARNING_F
-//#define _FPGA_HEATER_VOLTAGE_LESS_THAN_4_5_VOLTS       _WARNING_9
-
-
-#define ETM_CAN_REGISTER_GUN_DRIVER_RESET_FPGA        0x8202
-
-
-#define STATE_FAULT_HEATER_FAILURE           00
-#define STATE_FAULT_WARMUP_HEATER_OFF        10
-#define STATE_FAULT_HEATER_OFF               20
-#define STATE_START_UP                       30
-#define STATE_WAIT_FOR_CONFIG                40
-#define STATE_RESET_FPGA                     50
-#define STATE_HEATER_RAMP_UP                 60
-#define STATE_HEATER_WARM_UP                 70
-#define STATE_FAULT_HEATER_ON                80
-#define STATE_HEATER_WARM_UP_DONE            90
-#define STATE_POWER_SUPPLY_RAMP_UP           100
-#define STATE_HV_ON                          110
-#define STATE_TOP_ON                         120
-#define STATE_TOP_READY                      130
-#define STATE_BEAM_ENABLE                    140
-
-
-#define STATE_MESSAGE_FAULT_HEATER_OFF         0x0101
-#define STATE_MESSAGE_START_UP                 0x0001
-#define STATE_MESSAGE_HEATER_RAMP_UP           0x0003
-#define STATE_MESSAGE_HEATER_WARM_UP           0x0007
-#define STATE_MESSAGE_FAULT_HEATER_ON          0x010B
-#define STATE_MESSAGE_HEATER_WARM_UP_DONE      0x000B
-#define STATE_MESSAGE_HV_ON                    0x002B
-#define STATE_MESSAGE_BEAM_ENABLE              0x00AB
-
-
-
 #define UART1_BAUDRATE             625000        // U1 Baud Rate
 
 #define MODBUS_U1MODE_VALUE        (UART_EN & UART_IDLE_STOP & UART_DIS_WAKE & UART_DIS_LOOPBACK & UART_DIS_ABAUD & UART_NO_PAR_8BIT & UART_2STOPBITS)
@@ -528,89 +449,19 @@ extern TYPE_GLOBAL_DATA_A36772 global_data_A36772;
 #define UART1TX_ON_TRIS		(TRISDbits.TRISD7)
 #define UART1TX_ON_IO		(PORTDbits.RD7)
 
-/*
-  --- Timer1 Setup ---
-   Used to measure the PRF
-   With 10Mhz Clock, x64 multiplier will yield max period of 419mS, 6.4 uS per Tick
-*/
-#define A36772_T1CON_VALUE     (T1_ON & T1_IDLE_CON & T1_GATE_OFF & T1_PS_1_64 & T1_SOURCE_INT)
-#define A36772_PR1_VALUE_US    400000   // 400ms
-#define A36772_PR1_VALUE       ((FCY_CLK/1000000)*A36772_PR1_VALUE_US/64)
+///*
+//  --- Timer1 Setup ---
+//   Used to measure the PRF
+//   With 10Mhz Clock, x64 multiplier will yield max period of 419mS, 6.4 uS per Tick
+//*/
+//#define A36772_T1CON_VALUE     (T1_ON & T1_IDLE_CON & T1_GATE_OFF & T1_PS_1_64 & T1_SOURCE_INT)
+//#define A36772_PR1_VALUE_US    400000   // 400ms
+//#define A36772_PR1_VALUE       ((FCY_CLK/1000000)*A36772_PR1_VALUE_US/64)
 
-#define SLAVE_ADDRESS 0x07  //Slave address
+
 
 #define CRC_POLY 0xA001				// Reverse CR16 polynomial
 
-
-// Modbus states
-#define MODBUS_STATE_IDLE           0x01
-#define MODBUS_STATE_RECEIVING      0x02
-#define MODBUS_STATE_PROCESSING     0x03
-#define MODBUS_STATE_TRANSMITTING   0x04
-
-// PLC slave address
-#define MODBUS_SLAVE_ADDR       0x07
-
-// Modbus exception codes
-#define ILLEGAL_FUNCTION           0x01
-#define ILLEGAL_ADDRESS            0x02
-#define ILLEGAL_VALUE              0x03
-#define DEVICE_FAILURE             0x04
-
-//Other Errors
-#define ETMMODBUS_ERROR_CRC          10
-#define ETMMODBUS_ERROR_SLAVE_ADDR   20
-#define ETMMODBUS_ERROR_FUNCTION     30
-
-#define ETMMODBUS_COMMAND_OK         40
-
-
-// Modbus functions
-#define FUNCTION_READ_BITS              0x01
-#define FUNCTION_READ_REGISTERS         0x03
-#define FUNCTION_READ_INPUT_REGISTERS   0x04
-#define FUNCTION_WRITE_BIT              0x05
-#define FUNCTION_WRITE_REGISTER         0x06
-
-#define EXCEPTION_FLAGGED               0x09
- 
-//#define ETMMODBUS_CMD_QUEUE_SIZE   16
-
-typedef struct {
-  unsigned char function_code;
-  unsigned char received_function_code;
-  unsigned char data_length_bytes;
-  unsigned char exception_code;
-  unsigned char done;
-  unsigned int  output_address;
-  unsigned int  data_address;
-  unsigned int  qty_bits;
-  unsigned int  qty_reg;
-  unsigned int  write_value;
-  unsigned int  data[125];
-  unsigned char bit_data[125];
-} MODBUS_MESSAGE;
-
-//extern MODBUS_MESSAGE  current_command_ptr;
-
-unsigned char modbus_cmd_byte[8];
-
-#define ETMMODBUS_COMMAND_SIZE_MIN    8
-
-#define SLAVE_BIT_ARRAY_SIZE          64
-#define SLAVE_HOLD_REG_ARRAY_SIZE     64
-#define SLAVE_INPUT_REG_ARRAY_SIZE    64
-
-#define MODBUS_200ms_DELAY           20
-
-unsigned int ETM_modbus_state;
-
-unsigned int ModbusTimer;
-unsigned int ModbusTest;
-
-unsigned int ModbusSlaveHoldingRegister[SLAVE_HOLD_REG_ARRAY_SIZE];
-unsigned int ModbusSlaveInputRegister[SLAVE_INPUT_REG_ARRAY_SIZE];
-unsigned int ModbusSlaveBit[SLAVE_BIT_ARRAY_SIZE];
 
 
 
