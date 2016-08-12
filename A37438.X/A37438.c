@@ -49,8 +49,7 @@ int main(void) {
   InitializeA36772();
   _CONTROL_NOT_CONFIGURED = 0;
   _CONTROL_NOT_READY = 1;
-  global_data_A36772.run_time_counter = 0;
-  _T2IF = 0;
+  
   while (global_data_A36772.run_time_counter < 300) {
     DoStartupLEDs();
     if (_T2IF) {
@@ -77,10 +76,14 @@ void InitializeA36772(void) {
   global_data_A36772.message1_energy = 0x00;
   global_data_A36772.message2_blank = 0x00;
   global_data_A36772.message3_blank = 0x00;
-  PIN_RS485_ENABLE = 1;
+
   global_data_A36772.dose_switch_value = 0;
   global_data_A36772.trigger_received = 0;
+  global_data_A36772.delay_time = 0;
+  global_data_A36772.waiting_to_transmit = 0;
   
+  global_data_A36772.run_time_counter = 0;
+    
   
   // --------- BEGIN IO PIN CONFIGURATION ------------------
   
@@ -142,13 +145,13 @@ void InitializeA36772(void) {
   _T2IP = 2;
   T2CON = A36772_T2CON_VALUE;
   
-//      // Initialize TMR3
-//  PR3   = A36772_PR3_VALUE;
-//  TMR3  = 0;
-//  _T3IF = 0;
-////  _T3IP = 5;
-//  _T3IP = 2;
-//  T3CON = A36772_T3CON_VALUE;
+      // Initialize TMR3
+  PR3   = A36772_PR3_VALUE;
+  TMR3  = 0;
+  _T3IF = 0;
+//  _T3IP = 5;
+  _T3IP = 2;
+  T3CON = A36772_T3CON_VALUE;
   
   
 
@@ -256,20 +259,23 @@ void DoStartupLEDs(void) {
 
 void DoA36772(void) {
   
-//#ifdef __CAN_ENABLED
   ETMCanSlaveDoCan();
-//#endif
 
-//#ifndef __CAN_REQUIRED
   ClrWdt();
-//#endif
-  
-  
+
   unsigned int crc_int;
   unsigned int crc_16_msb;
+  
+    if (global_data_A36772.waiting_to_transmit) {
+      global_data_A36772.delay_time++;
+    }
+  }
 
   if (global_data_A36772.trigger_received){
+      
     global_data_A36772.trigger_received = 0;
+    global_data_A36772.waiting_to_transmit = 1;
+    
     global_data_A36772.message1_energy ^= 0x01;
     global_data_A36772.message0_dose = Dose_Array[global_data_A36772.dose_switch_value];
     if (global_data_A36772.message1_energy) {
@@ -282,6 +288,12 @@ void DoA36772(void) {
     global_data_A36772.message5_crc_high = (unsigned char)crc_16_msb & 0xff;
     global_data_A36772.message4_crc_low  = (unsigned char)crc_int & 0xff;     
     
+  }
+  
+  if (global_data_A36772.delay_time >= TRANSMIT_DELAY_TIME) {  
+    global_data_A36772.delay_time = 0;
+    global_data_A36772.waiting_to_transmit = 0;
+      
     BufferByte64WriteByte(&uart1_output_buffer, global_data_A36772.message0_dose);
     BufferByte64WriteByte(&uart1_output_buffer, global_data_A36772.message1_energy);
     BufferByte64WriteByte(&uart1_output_buffer, global_data_A36772.message2_blank);
@@ -293,7 +305,6 @@ void DoA36772(void) {
       U1TXREG = BufferByte64ReadByte(&uart1_output_buffer);
     }
   }
-  
 
   if (_T2IF) {
     // Run once every 10ms
@@ -367,45 +378,12 @@ void DoA36772(void) {
     ETMCanSlaveSetDebugRegister(0xB, global_data_A36772.message0_dose);
     ETMCanSlaveSetDebugRegister(0xC, global_data_A36772.message1_energy);
     ETMCanSlaveSetDebugRegister(0xD, global_data_A36772.message4_crc_low);
-    ETMCanSlaveSetDebugRegister(0xE, global_data_A36772.message5_crc_high);//
-    //ETMCanSlaveSetDebugRegister(0xF, global_data_A36772.ref_ek.reading_scaled_and_calibrated);
-//    ETMCanSlaveSetDebugRegister(0xA, global_data_A36772.monitor_grid_voltage.set_point); //run_time_counter);
-//    ETMCanSlaveSetDebugRegister(0xB, global_data_A36772.monitor_grid_voltage.dac_setting_scaled_and_calibrated); //fault_restart_remaining);
-//    ETMCanSlaveSetDebugRegister(0xC, global_data_A36772.ref_vtop.reading_scaled_and_calibrated); //power_supply_startup_remaining);
-//    ETMCanSlaveSetDebugRegister(0xD, global_data_A36772.heater_warm_up_time_remaining);
-//    ETMCanSlaveSetDebugRegister(0xE, global_data_A36772.heater_ramp_up_time);
+    ETMCanSlaveSetDebugRegister(0xE, global_data_A36772.message5_crc_high);
     ETMCanSlaveSetDebugRegister(0xF, global_data_A36772.run_time_counter);
+
     
-//    ETMCanSlaveSetDebugRegister(0xA, _FPGA_FIRMWARE_MINOR_REV_MISMATCH);
-//    ETMCanSlaveSetDebugRegister(0xB, fpga_bits.fpga_firmware_minor_rev);
-//    ETMCanSlaveSetDebugRegister(0xC, _WARNING_REGISTER);
-    
-//    
-//    slave_board_data.log_data[0] = global_data_A36772.input_gun_i_peak.reading_scaled_and_calibrated;
-//    slave_board_data.log_data[1] = global_data_A36772.input_hv_v_mon.reading_scaled_and_calibrated;
-//    slave_board_data.log_data[2] = global_data_A36772.input_top_v_mon.reading_scaled_and_calibrated;    //gdoc says low energy
-//    slave_board_data.log_data[3] = global_data_A36772.input_top_v_mon.reading_scaled_and_calibrated;    //gdoc says high energy
-//    slave_board_data.log_data[4] = global_data_A36772.input_temperature_mon.reading_scaled_and_calibrated;
-//    slave_board_data.log_data[5] = global_data_A36772.heater_warm_up_time_remaining;
-//    slave_board_data.log_data[6] = global_data_A36772.input_htr_i_mon.reading_scaled_and_calibrated;
-//    slave_board_data.log_data[7] = global_data_A36772.input_htr_v_mon.reading_scaled_and_calibrated;
-//    slave_board_data.log_data[8] = global_data_A36772.analog_output_high_voltage.set_point;
-//    slave_board_data.log_data[9] = global_data_A36772.heater_voltage_target;
-//    slave_board_data.log_data[10] = global_data_A36772.analog_output_top_voltage.set_point;       //gdoc says low energy
-//    slave_board_data.log_data[11] = global_data_A36772.analog_output_top_voltage.set_point;       //gdoc says high energy
-//    slave_board_data.log_data[12] = global_data_A36772.input_bias_v_mon.reading_scaled_and_calibrated;
-//    slave_board_data.log_data[13] = global_data_A36772.control_state;
-//    slave_board_data.log_data[14] = global_data_A36772.adc_read_error_count;
-//    slave_board_data.log_data[15] = GUN_DRIVER_LOAD_TYPE;
-
-
-
 //    ETMCanSlaveSetDebugRegister(7, global_data_A36772.dac_write_failure_count);
 
-
-    // Send out Data to local DAC and offboard.  Each channel will be updated once every 40mS
-    // Do not send out while in state "STATE_WAIT_FOR_CONFIG" because the module is not ready to receive data and
-    // you will just get data transfer errors
  
     
     // Turn on switch bit pullups
@@ -426,8 +404,6 @@ void ETMCanSlaveExecuteCMDBoardSpecific(ETMCanMessage* message_ptr) {
   index_word = message_ptr->word3;
 
 }
-
-
 
 
 
@@ -530,6 +506,8 @@ void __attribute__((interrupt(__save__(CORCON,SR)), no_auto_psv)) _INT3Interrupt
 
     
   global_data_A36772.trigger_received = 1;
+  
+  _T3IF = 0;                                  // Clear timer flag to start transmission delay timer
     
 //  if ((TMR1 > MIN_PERIOD) || _T1IF) {
 //    // Calculate the Trigger PRF
