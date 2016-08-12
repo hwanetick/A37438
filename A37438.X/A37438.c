@@ -266,6 +266,10 @@ void DoA36772(void) {
   unsigned int crc_int;
   unsigned int crc_16_msb;
   
+  
+  if (_T3IF) {
+    // Run once every 100us
+    _T3IF = 0;
     if (global_data_A36772.waiting_to_transmit) {
       global_data_A36772.delay_time++;
     }
