@@ -7,6 +7,7 @@
       <itemPath>A37438.h</itemPath>
       <itemPath>FIRMWARE_VERSION.h</itemPath>
       <itemPath>A37438_CONFIG.h</itemPath>
+      <itemPath>ETM_CRC.h</itemPath>
     </logicalFolder>
     <logicalFolder name="LinkerScript"
                    displayName="Linker Files"
@@ -196,6 +197,7 @@
         <property key="UART 1" value="true"/>
         <property key="UART 2" value="true"/>
         <property key="debugoptions.useswbreakpoints" value="false"/>
+        <property key="firmware.download.all" value="false"/>
         <property key="hwtoolclock.frcindebug" value="false"/>
         <property key="memories.aux" value="false"/>
         <property key="memories.bootflash" value="false"/>
